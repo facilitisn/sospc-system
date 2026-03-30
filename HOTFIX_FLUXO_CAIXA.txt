@@ -1,0 +1,1 @@
+Adiciona Financeiro / Fluxo de Caixa com lançamentos manuais e entradas automáticas de vendas e OS entregues.
