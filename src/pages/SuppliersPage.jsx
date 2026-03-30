@@ -3,7 +3,7 @@ import Button from "../components/ui/Button";
 import Card from "../components/ui/Card";
 import EmptyState from "../components/ui/EmptyState";
 import PageHeader from "../components/ui/PageHeader";
-import { useToast } from "../components/ui/toast";
+import { useToast } from "../components/ui/Toast";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../auth/auth.jsx";
 
