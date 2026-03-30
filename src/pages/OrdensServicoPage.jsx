@@ -56,12 +56,29 @@ const QUICK_STATUS_ACTIONS = [
 ];
 
 const PAYMENT_METHODS = ["Dinheiro", "Pix", "Crédito", "Débito", "Crediário", "Outros"];
-const TRACKING_BASE_URL = (
-  import.meta.env.VITE_TRACKING_BASE_URL || "https://dejected-frederica-huger.ngrok-free.dev"
-).replace(/\/$/, "");
+const DEFAULT_TRACKING_BASE_URL = "https://sistema.sospc.com.br";
+
+function resolveTrackingBaseUrl() {
+  const configuredBaseUrl = import.meta.env.VITE_TRACKING_BASE_URL?.trim();
+  if (configuredBaseUrl) {
+    return configuredBaseUrl.replace(/\/$/, "");
+  }
+
+  if (typeof window !== "undefined") {
+    const currentOrigin = window.location.origin?.replace(/\/$/, "");
+    const currentHost = window.location.hostname?.toLowerCase();
+    const isLocalEnvironment = ["localhost", "127.0.0.1"].includes(currentHost);
+
+    if (currentOrigin && !isLocalEnvironment) {
+      return currentOrigin;
+    }
+  }
+
+  return DEFAULT_TRACKING_BASE_URL;
+}
 
 function buildTrackingUrl(trackingToken) {
-  return `${TRACKING_BASE_URL}/acompanhar/os/${trackingToken}`;
+  return `${resolveTrackingBaseUrl()}/acompanhar/os/${trackingToken}`;
 }
 
 async function buildTrackingQrDataUrl(order) {
