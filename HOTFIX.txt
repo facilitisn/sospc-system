@@ -1,3 +1,0 @@
-Versão estável restaurada.
-Esta versão volta para a base funcional anterior ao pacote que causou erro geral.
-Use esta base para continuar o projeto com segurança.
