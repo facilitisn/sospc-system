@@ -1,0 +1,6 @@
+PDV PROFISSIONAL LOTE 1
+- atalhos novos (F2 leitor, F3 busca, F4 recebido, F6 finalizar, F8 nova venda, F9 cupom)
+- campo recebido com foco via atalho
+- busca rápida com foco via atalho
+- controle inline de quantidade com botoes +/-
+- alertas operacionais no checkout

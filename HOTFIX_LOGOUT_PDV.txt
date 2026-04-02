@@ -1,0 +1,6 @@
+HOTFIX: correção de logout ao sair do PDV
+
+- removida navegação com window.location.assign nas telas principais do fluxo PDV
+- navegação agora usa react-router (SPA), evitando reload total
+- sessão local agora é persistida no login legado (users)
+- restauração de sessão local para owner/profile ajustada no bootstrap da autenticação
