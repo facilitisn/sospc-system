@@ -1510,8 +1510,6 @@ export default function PDVPage() {
         total: previewTotals.total,
         status: payload.status,
         cash_session_id: cashSession.id,
-        seller_name: payload.sellerName || null,
-        commission_rate: parseCommissionRate(payload.commissionRate),
       });
 
       if (saleError) {

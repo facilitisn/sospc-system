@@ -146,6 +146,9 @@ export default function CreateAccountPage() {
         throw new Error("Usuário não retornado pelo Supabase Auth.");
       }
 
+      const trialEndsAt = new Date();
+      trialEndsAt.setDate(trialEndsAt.getDate() + 7);
+
       const { data: tenantData, error: tenantError } = await insertWithColumnFallback(
         "tenants",
         {
@@ -155,6 +158,10 @@ export default function CreateAccountPage() {
           email,
           phone: phone || null,
           is_active: true,
+          plan: "profissional",
+          subscription_status: "trial",
+          trial_ends_at: trialEndsAt.toISOString(),
+          expires_at: null,
         }
       );
 

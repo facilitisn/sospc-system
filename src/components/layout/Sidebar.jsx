@@ -50,6 +50,7 @@ const groups = [
     items: [
       { to: "/usuarios", label: "Usuários", icon: Shield },
       { to: "/configuracoes", label: "Configurações", icon: Settings },
+      { to: "/planos", label: "Planos", icon: CreditCard },
     ],
   },
 ];

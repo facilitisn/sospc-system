@@ -53,6 +53,7 @@ const routePermissions = {
   "/vendas": ["Administrador", "Atendente", "Técnico", "owner"],
   "/caixa": ["Administrador", "Atendente", "Técnico", "owner"],
   "/configuracoes": ["Administrador", "owner"],
+  "/planos": ["Administrador", "owner"],
 };
 
 function normalizeUser(user) {
@@ -143,6 +144,66 @@ async function fetchProfileById(id) {
   return data || null;
 }
 
+async function fetchTenantSubscription(tenantId) {
+  if (!tenantId) return null;
+
+  const { data, error } = await supabase
+    .from("tenants")
+    .select("id, plan, subscription_status, trial_ends_at, expires_at")
+    .eq("id", tenantId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message || "Erro ao carregar assinatura do tenant.");
+  }
+
+  return data || null;
+}
+
+function normalizeTenantSubscription(subscription, tenantId = "") {
+  if (!subscription) {
+    return tenantId
+      ? {
+          id: tenantId,
+          plan: "essencial",
+          subscription_status: "trial",
+          trial_ends_at: null,
+          expires_at: null,
+        }
+      : null;
+  }
+
+  return {
+    id: subscription.id || tenantId,
+    plan: subscription.plan || "essencial",
+    subscription_status: subscription.subscription_status || "trial",
+    trial_ends_at: subscription.trial_ends_at || null,
+    expires_at: subscription.expires_at || null,
+  };
+}
+
+export function isTenantAccessAllowed(subscription) {
+  if (!subscription) return false;
+
+  if (subscription.subscription_status === "active") {
+    if (!subscription.expires_at) return true;
+    return new Date(subscription.expires_at).getTime() >= Date.now();
+  }
+
+  if (subscription.subscription_status === "trial") {
+    if (!subscription.trial_ends_at) return false;
+    return new Date(subscription.trial_ends_at).getTime() >= Date.now();
+  }
+
+  return false;
+}
+
+export function getTrialDaysLeft(subscription) {
+  if (!subscription?.trial_ends_at) return 0;
+  const diff = new Date(subscription.trial_ends_at).getTime() - Date.now();
+  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+}
+
 async function buildAuthUserFromSupabase(authUser) {
   if (!authUser?.id) return null;
 
@@ -205,10 +266,32 @@ export function hasRouteAccess(user, path) {
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [tenantSubscription, setTenantSubscription] = useState(null);
   const [isBootstrapped, setIsBootstrapped] = useState(false);
 
   useEffect(() => {
     let mounted = true;
+
+    async function syncTenantSubscription(nextUser) {
+      if (!mounted) return;
+
+      if (!nextUser?.tenant_id) {
+        setTenantSubscription(null);
+        return;
+      }
+
+      try {
+        const subscription = await fetchTenantSubscription(nextUser.tenant_id);
+        if (mounted) {
+          setTenantSubscription(normalizeTenantSubscription(subscription, nextUser.tenant_id));
+        }
+      } catch (error) {
+        console.error("Erro ao carregar assinatura do tenant:", error);
+        if (mounted) {
+          setTenantSubscription(normalizeTenantSubscription(null, nextUser.tenant_id));
+        }
+      }
+    }
 
     async function bootstrap() {
       try {
@@ -225,6 +308,8 @@ export function AuthProvider({ children }) {
             saveLocalValue(AUTH_KEY, authUser);
             setUser(authUser);
           }
+
+          await syncTenantSubscription(authUser);
           return;
         }
 
@@ -238,18 +323,23 @@ export function AuthProvider({ children }) {
               saveLocalValue(AUTH_KEY, restoredUser);
               setUser(restoredUser);
             }
+
+            await syncTenantSubscription(restoredUser);
           } else if (mounted) {
             localStorage.removeItem(AUTH_KEY);
             setUser(null);
+            setTenantSubscription(null);
           }
         } else if (mounted) {
           setUser(null);
+          setTenantSubscription(null);
         }
       } catch (error) {
         console.error("Erro ao inicializar autenticação:", error);
         if (mounted) {
           localStorage.removeItem(AUTH_KEY);
           setUser(null);
+          setTenantSubscription(null);
         }
       } finally {
         if (mounted) {
@@ -274,18 +364,23 @@ export function AuthProvider({ children }) {
               if (restoredUser) {
                 saveLocalValue(AUTH_KEY, restoredUser);
                 if (mounted) setUser(restoredUser);
+                await syncTenantSubscription(restoredUser);
                 return;
               }
             }
 
             localStorage.removeItem(AUTH_KEY);
-            if (mounted) setUser(null);
+            if (mounted) {
+              setUser(null);
+              setTenantSubscription(null);
+            }
             return;
           }
 
           const authUser = await buildAuthUserFromSupabase(session.user);
           saveLocalValue(AUTH_KEY, authUser);
           if (mounted) setUser(authUser);
+          await syncTenantSubscription(authUser);
         } catch (error) {
           console.error("Erro ao sincronizar sessão autenticada:", error);
         }
@@ -319,8 +414,10 @@ export function AuthProvider({ children }) {
           is_active: profile?.is_active ?? true,
         });
 
+        const subscription = await fetchTenantSubscription(authUser.tenant_id);
         saveLocalValue(AUTH_KEY, authUser);
         setUser(authUser);
+        setTenantSubscription(normalizeTenantSubscription(subscription, authUser.tenant_id));
         return;
       }
     }
@@ -351,25 +448,36 @@ export function AuthProvider({ children }) {
       is_active: foundUser.is_active,
     });
 
+    const subscription = await fetchTenantSubscription(normalized.tenant_id);
     saveLocalValue(AUTH_KEY, normalized);
     setUser(normalized);
+    setTenantSubscription(normalizeTenantSubscription(subscription, normalized.tenant_id));
+  }
+
+  async function refreshTenantSubscription() {
+    if (!user?.tenant_id) return;
+    const subscription = await fetchTenantSubscription(user.tenant_id);
+    setTenantSubscription(normalizeTenantSubscription(subscription, user.tenant_id));
   }
 
   async function logout() {
     localStorage.removeItem(AUTH_KEY);
     await supabase.auth.signOut();
     setUser(null);
+    setTenantSubscription(null);
   }
 
   const value = useMemo(
     () => ({
       user,
+      tenantSubscription,
       isAuthenticated: !!user,
       isBootstrapped,
       login,
       logout,
+      refreshTenantSubscription,
     }),
-    [user, isBootstrapped]
+    [user, tenantSubscription, isBootstrapped]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

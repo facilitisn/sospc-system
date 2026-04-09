@@ -16,7 +16,8 @@ import VendasPage from "../pages/VendasPage.jsx";
 import CaixaPage from "../pages/CaixaPage.jsx";
 import PublicOrderTrackingPage from "../pages/PublicOrderTrackingPage";
 import CreateAccountPage from "../pages/CreateAccountPage";
-import { AuthProvider, hasRouteAccess, useAuth } from "../auth/auth.jsx";
+import PlanosPage from "../pages/PlanosPage";
+import { AuthProvider, hasRouteAccess, isTenantAccessAllowed, useAuth } from "../auth/auth.jsx";
 import LoadingState from "../components/ui/LoadingState";
 
 const TITLES = {
@@ -30,6 +31,7 @@ const TITLES = {
   "/financeiro": "Financeiro / Fluxo de Caixa",
   "/usuarios": "Usuários",
   "/configuracoes": "Configurações",
+  "/planos": "Planos",
   "/login": "Login",
   "/criar-conta": "Criar conta",
 };
@@ -45,7 +47,13 @@ export function usePageTitle() {
 }
 
 function Protected({ children }) {
-  const { isAuthenticated, isBootstrapped } = useAuth();
+  const { isAuthenticated, isBootstrapped, tenantSubscription, user } = useAuth();
+  const location = useLocation();
+  const isPlanRoute = location.pathname === "/planos";
+  const requiresSubscriptionCheck = ["owner", "Administrador"].includes(user?.role);
+  const canAccessSystem = requiresSubscriptionCheck
+    ? isTenantAccessAllowed(tenantSubscription)
+    : true;
 
   if (!isBootstrapped) {
     return (
@@ -55,7 +63,15 @@ function Protected({ children }) {
     );
   }
 
-  return isAuthenticated ? children : <Navigate to="/login" replace />;
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!canAccessSystem && !isPlanRoute) {
+    return <Navigate to="/planos" replace />;
+  }
+
+  return children;
 }
 
 function PublicOnly({ children }) {
@@ -152,6 +168,15 @@ function PrivateLayout() {
         <Route path="/caixa" element={<CaixaPage />} />
 
         <Route
+          path="/planos"
+          element={
+            <RoleGate path="/planos">
+              <PlanosPage />
+            </RoleGate>
+          }
+        />
+
+        <Route
           path="/configuracoes"
           element={
             <RoleGate path="/configuracoes">
@@ -178,7 +203,12 @@ function PrivateLayout() {
 export default function AppRouter() {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <BrowserRouter
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
         <Routes>
           <Route
             path="/login"
